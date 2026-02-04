@@ -1,0 +1,13 @@
+# Clear collected calibration frames
+
+uint8 CLEAR_ALL = 0
+uint8 CLEAR_CAM0 = 1
+uint8 CLEAR_CAM1 = 2
+uint8 CLEAR_STEREO = 3
+
+uint8 target    # What to clear
+
+---
+
+bool success
+string message

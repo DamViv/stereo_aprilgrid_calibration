@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>aprilgrid_calibration_hmi</name>
+  <version>0.1.0</version>
+  <description>GUI pour la calibration des caméras AprilGrid</description>
+
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>PySide6</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>  
+</package>

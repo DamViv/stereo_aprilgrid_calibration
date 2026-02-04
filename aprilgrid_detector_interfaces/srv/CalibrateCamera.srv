@@ -1,0 +1,14 @@
+# Perform monocular camera calibration
+
+uint8 camera_id                  # 0 or 1
+string camera_model              # "double_sphere", "pinhole", "fisheye", etc.
+string output_path               # Where to save calibration (empty = default)
+
+---
+
+bool success
+string message
+float64 reprojection_error
+string calibration_file          # Path to saved calibration YAML
+float64[] intrinsics             # Flattened intrinsic parameters
+float64[] distortion             # Distortion coefficients

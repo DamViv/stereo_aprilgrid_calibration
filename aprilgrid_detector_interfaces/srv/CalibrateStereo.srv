@@ -1,0 +1,16 @@
+# Perform stereo calibration (requires both cameras already calibrated)
+
+string output_path               # Where to save calibration (empty = default)
+bool refine_intrinsics          # Whether to refine intrinsics during stereo calib
+
+---
+
+bool success
+string message
+float64 reprojection_error
+string calibration_file          # Path to saved stereo calibration YAML
+
+# Extrinsics: transformation from cam0 to cam1
+float64[16] t_cam1_cam0         # 4x4 transformation matrix (row-major)
+float64[3] baseline_vector      # Translation vector
+float64[3] rotation_euler       # Roll, pitch, yaw in radians

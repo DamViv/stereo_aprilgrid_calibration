@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>aprilgrid_detector</name>
+  <version>0.0.0</version>
+  <description>AprilGrid detector ROS2</description>
+
+  <maintainer email="damien.vivet@gmail.com">d.vivet</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>image_transport</depend>
+
+  <depend>aprilgrid_detector_interfaces</depend>
+
+  <exec_depend>opencv</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

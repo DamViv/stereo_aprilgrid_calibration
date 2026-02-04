@@ -1,0 +1,37 @@
+# Configuration for AprilGrid Calibration
+calibration_manager_node:
+  ros__parameters:
+    # Image dimensions
+    image_width: 1280
+    image_height: 1024
+
+    # AprilGrid geometry
+    aprilgrid:
+      rows: 7
+      cols: 10
+      tag_size: 0.05      # meters
+      spacing: 0.015      # meters
+      first_id: 0
+      tag_family: "36h11"
+
+    # Camera topics
+    topics:
+      cam0_apriltags: "/cam_0/apriltags"
+      cam1_apriltags: "/cam_1/apriltags"
+      cam0_image: "/cam_0/image_raw"
+      cam1_image: "/cam_1/image_raw"
+
+    # Collection parameters
+    collection:
+      min_mono_frames: 40
+      min_stereo_frames: 30
+      min_detections_per_frame: 20
+      min_coverage: 0.15
+      min_movement_pixels: 20.0
+      max_time_delta_stereo: 0.1  # seconds
+
+    # Calibration parameters
+    calibration:
+      camera_model: "double_sphere"
+      output_dir: "~/.ros/calibrations"
+      auto_save: true
