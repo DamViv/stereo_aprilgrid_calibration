@@ -87,7 +87,7 @@ private:
     int image_height_ = 1024;
     AprilGridGeometry grid_;
 
-    const float min_move_pixels_ = 20.0f;
+    const float min_move_pixels_ = 15.0f;
     const int min_detections_ = 20;
     const double max_dt_ = 0.1; // 100ms max pour stéréo
 };

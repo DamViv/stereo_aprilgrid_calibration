@@ -5,14 +5,14 @@
 #include <ceres/rotation.h>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
-
+#include <cmath>
 
 // ==================================== Reprojection double sphere ======================================
 
 template <typename T>
-inline bool projectDoubleSphere(
+inline void projectDoubleSphere(
     const T& x, const T& y, const T& z,
-    const T* intrinsics,   // fx fy cx cy xi alpha
+    const T* intrinsics, 
     T& u, T& v)
 {
     const T& fx = intrinsics[0];
@@ -24,140 +24,84 @@ inline bool projectDoubleSphere(
 
     const T eps = T(1e-8);
 
-    T d1 = sqrt(x*x + y*y + z*z);
-    if (d1 < eps) return false;
+    // distance au centre
+    T d1 = sqrt(x*x + y*y + z*z + eps);
 
+    // z1 = z + xi*d1
     T z1 = z + xi * d1;
-    if (z1 < eps) return false;
+    if (z1 < eps) z1 = eps;
 
-    T d2 = sqrt(x*x + y*y + z1*z1);
+    // distance modifiée
+    T d2 = sqrt(x*x + y*y + z1*z1 + eps);
+
+    // dénominateur du modèle
     T denom = alpha * d2 + (T(1.0) - alpha) * z1;
+    if (denom < eps) denom = eps;
 
-    if (denom < eps) return false;
+    // projection pixel
+    u = fx * x / denom + cx;
+    v = fy * y / denom + cy;
+}
 
-    T mx = x / denom;
-    T my = y / denom;
+template <typename T>
+inline void unprojectDoubleSphere(
+    const T& u, const T& v,
+    const T* intrinsics, 
+    T ray[3])
+{
+    const T& fx = intrinsics[0];
+    const T& fy = intrinsics[1];
+    const T& cx = intrinsics[2];
+    const T& cy = intrinsics[3];
+    const T& xi = intrinsics[4];
+    const T& alpha = intrinsics[5];
 
-    u = fx * mx + cx;
-    v = fy * my + cy;
+    const T eps = T(1e-8);
 
-    return true;
+    // coordonnées normalisées
+    T mx = (u - cx) / fx;
+    T my = (v - cy) / fy;
+    T r2 = mx*mx + my*my;
+
+    // calcul de mz
+    T tmp = T(1.0) - (T(2.0)*alpha - T(1.0))*r2;
+    if (tmp < eps) tmp = eps;
+
+    T mz = (T(1.0) - alpha*alpha*r2) / (alpha * sqrt(tmp) + (T(1.0) - alpha) + eps);
+
+    // dénominateur pour k
+    T denom = mz*mz + r2;
+    if (denom < eps) denom = eps;
+
+    // k selon Usenko et al.
+    T k = (mz*xi + sqrt(mz*mz + (T(1.0)-xi*xi)*r2 + eps)) / denom;
+
+    ray[0] = k * mx;
+    ray[1] = k * my;
+    ray[2] = k * mz - xi;
+
+    // normalisation
+    T norm = sqrt(ray[0]*ray[0] + ray[1]*ray[1] + ray[2]*ray[2] + eps);
+    ray[0] /= norm;
+    ray[1] /= norm;
+    ray[2] /= norm;
 }
 
 
-// ============================================== Mono ==============================================
-// --- Double Sphere Mono Residual ---
-
-struct ReprojectionErrorDS {
-    ReprojectionErrorDS(const cv::Point3f& X, const cv::Point2f& x) : X_(X), x_(x) {}
-
-    template <typename T>
-    bool operator()(const T* const intrinsics,  // fx,fy,cx,cy,xi,alpha
-                    const T* const rt,          // rx,ry,rz,tx,ty,tz
-                    T* residuals) const 
-    {
-
-        // Point caméra
-        T p[3] = {T(X_.x), T(X_.y), T(X_.z)};
-        T pc0[3];
-        ceres::AngleAxisRotatePoint(rt, p, pc0);
-        pc0[0] += rt[3];
-        pc0[1] += rt[4];
-        pc0[2] += rt[5];
-
-        // Projection
-        T u, v;
-        if (!projectDoubleSphere(pc0[0], pc0[1], pc0[2], intrinsics, u, v)){
-            // Important : pénaliser doucement si projection invalide (??? ou ignore?)
-            residuals[0] = T(10);
-            residuals[1] = T(10);
-            return true;
-        }        
-        
-        // Résiduals
-        residuals[0] = u - T(x_.x);
-        residuals[1] = v - T(x_.y);
-
-        return true;
-    }
-
-    cv::Point3f X_;
-    cv::Point2f x_;
-};
 
 
 
-// ============================================== Stereo ==============================================
-// --- Double Sphere Mono Residual ---
-
-struct ReprojectionErrorStereoDS {
-    ReprojectionErrorStereoDS(const cv::Point3f& X,
-                              const cv::Point2f& x0,
-                              const cv::Point2f& x1)
-        : X_(X), x0_(x0), x1_(x1) {}
-
-    template <typename T>
-    bool operator()(const T* const intrinsics0,
-                    const T* const intrinsics1,
-                    const T* const RT_board,
-                    const T* const RT_cam1_cam0,
-                    T* residuals) const
-    {
-        // Point monde → cam0
-        T Pw[3] = {T(X_.x), T(X_.y), T(X_.z)};
-        T Pc0[3];
-        ceres::AngleAxisRotatePoint(RT_board, Pw, Pc0);
-        Pc0[0] += RT_board[3];
-        Pc0[1] += RT_board[4];
-        Pc0[2] += RT_board[5];
-
-        // Projection cam0
-        T u0, v0;
-        if (!projectDoubleSphere(Pc0[0], Pc0[1], Pc0[2], intrinsics0, u0, v0)){
-            residuals[0] = T(10);
-            residuals[1] = T(10);
-            residuals[2] = T(10);
-            residuals[3] = T(10);
-            return true;
-        }
-
-        // cam0 → cam1
-        T Pc1[3];
-        ceres::AngleAxisRotatePoint(RT_cam1_cam0, Pc0, Pc1);
-        Pc1[0] += RT_cam1_cam0[3];
-        Pc1[1] += RT_cam1_cam0[4];
-        Pc1[2] += RT_cam1_cam0[5];
-
-        // Projection cam1
-        T u1, v1;
-        if (!projectDoubleSphere(Pc1[0], Pc1[1], Pc1[2], intrinsics1, u1, v1)){
-           residuals[0] = T(10);
-            residuals[1] = T(10);
-            residuals[2] = T(10);
-            residuals[3] = T(10);
-            return true;
-        }
-
-        // Résidus
-        residuals[0] = u0 - T(x0_.x);
-        residuals[1] = v0 - T(x0_.y);
-        residuals[2] = u1 - T(x1_.x);
-        residuals[3] = v1 - T(x1_.y);
-
-        return true;
-    }
-
-    cv::Point3f X_;
-    cv::Point2f x0_;
-    cv::Point2f x1_;
-};
 
 
 
+
+void showDSCorrected(const cv::Mat& img, const cv::Mat& K, const cv::Mat &D, const double &fov,
+                     const std::string& mode,
+                     cv::Size out_size,
+                     float f_persp);
 // Projection equirectangular
-cv::Mat generateEquirectangular(const cv::Mat& img, const cv::Mat& K, const cv::Mat& D, int width, int height);
+// cv::Mat generateEquirectangular(const cv::Mat& img, const cv::Mat& K, const cv::Mat& D, int width, int height);
 
-cv::Mat undistortDoubleSphere(const cv::Mat& img, const cv::Mat& K, const cv::Mat& D);
-
+// cv::Mat undistortDoubleSphere(const cv::Mat& img, const cv::Mat& K, const cv::Mat& D);
 
 #endif //DOUBLE_SPHERE_HPP

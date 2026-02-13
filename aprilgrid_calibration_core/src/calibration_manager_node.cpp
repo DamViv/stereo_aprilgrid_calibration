@@ -4,8 +4,8 @@
 #include <yaml-cpp/yaml.h>
 
 #include "aprilgrid_calibration_core/frame_collector.hpp"
-#include "aprilgrid_calibration_core/mono_calibrator.hpp"
-#include "aprilgrid_calibration_core/stereo_calibrator.hpp"
+#include "aprilgrid_calibration_core/mono_calibrator_ds.hpp"
+#include "aprilgrid_calibration_core/stereo_calibrator_ds.hpp"
 #include "aprilgrid_calibration_core/camera_model.hpp"
 
 #include "aprilgrid_detector_interfaces/msg/april_tag_array.hpp"
@@ -94,10 +94,10 @@ public:
         collector_->setMinFrames(min_mono_frames, min_stereo_frames);
         collector_->setQualityThresholds(min_pattern_size_ratio, min_movement, max_time_delta);
         collector_->setCollectionMode(CollectionMode::IDLE);
-        
-        mono_cal0_ = std::make_shared<MonoCalibrator>(width, height, camera_model_);
-        mono_cal1_ = std::make_shared<MonoCalibrator>(width, height, camera_model_);
-        stereo_cal_ = std::make_shared<StereoCalibrator>(width, height, camera_model_);
+                
+        mono_cal0_ = std::make_shared<MonoCalibratorDS>(width, height, camera_model_);
+        mono_cal1_ = std::make_shared<MonoCalibratorDS>(width, height, camera_model_);
+        stereo_cal_ = std::make_shared<StereoCalibratorDS>(width, height, camera_model_);
         
         // ============================================================================
         // Subscriptions
@@ -168,9 +168,10 @@ private:
     // ============================================================================
     
     std::shared_ptr<FrameCollector> collector_;
-    std::shared_ptr<MonoCalibrator> mono_cal0_;
-    std::shared_ptr<MonoCalibrator> mono_cal1_;
-    std::shared_ptr<StereoCalibrator> stereo_cal_;
+    std::shared_ptr<MonoCalibratorDS> mono_cal0_;
+    std::shared_ptr<MonoCalibratorDS> mono_cal1_;
+
+    std::shared_ptr<StereoCalibratorDS> stereo_cal_;
     
     CameraModel camera_model_;
     std::string output_dir_;
@@ -259,8 +260,7 @@ private:
                             collector_->getStats().cam1_count > 0);
         
         // Set collection mode string
-        // (Note: We'd need to add a getter for mode in FrameCollector for exact mode)
-        msg.collection_mode = "ACTIVE";  // Simplified
+        msg.collection_mode = "ACTIVE";
         
         stats_pub_->publish(msg);
     }
@@ -305,9 +305,7 @@ private:
     void onStopCollection(
         const StopCollection::Request::SharedPtr,
         StopCollection::Response::SharedPtr res)
-    {
-        collector_->setCollectionMode(CollectionMode::IDLE);
-                
+    {               
         res->success = true;
         res->message = "Collection stopped";
         
@@ -352,33 +350,28 @@ private:
         
         // Get detection data
         std::vector<std::vector<cv::Point2f>> imgPts;
-        std::vector<std::vector<cv::Point3f>> objPts;
-        
+        std::vector<std::vector<cv::Point3f>> objPts;        
         if (!collector_->getMonoDetections(cam_id, imgPts, objPts)) {
             res->success = false;
             res->message = "Insufficient calibration data for camera " + std::to_string(cam_id);
             RCLCPP_ERROR(get_logger(), "%s", res->message.c_str());
             return;
-        }
-        
+        }        
         RCLCPP_INFO(get_logger(), "  Using %zu views for calibration", imgPts.size());
         
-        // Select calibrator
+        // Select calibrator and add views       
         auto& calibrator = (cam_id == 0) ? mono_cal0_ : mono_cal1_;
-        
-        // Add views
         for (size_t i = 0; i < imgPts.size(); ++i) {
             calibrator->addView(imgPts[i], objPts[i]);
         }
         
-        // Calibrate
+        // Start calibration
         if (!calibrator->calibrate()) {
             res->success = false;
             res->message = "Calibration failed for camera " + std::to_string(cam_id);
             RCLCPP_ERROR(get_logger(), "%s", res->message.c_str());
             return;
-        }
-        
+        }            
         double reproj_error = calibrator->reprojectionError();
         
         // Mark as calibrated
@@ -391,31 +384,25 @@ private:
         // Save calibration
         std::string output_path = req->output_path.empty() ? 
             output_dir_ + "/camera_" + std::to_string(cam_id) + ".yaml" :
-            req->output_path;
-        
+            req->output_path;        
         if (saveMonoCalibration(calibrator, output_path, cam_id)) {
             res->calibration_file = output_path;
+            RCLCPP_INFO(get_logger(), "  Saved to: %s", output_path.c_str());
         }
         
         // Fill response
         res->success = true;
         res->message = "Camera " + std::to_string(cam_id) + " calibrated successfully";
-        res->reprojection_error = reproj_error;
-        
-        // Extract intrinsics (simplified - would need to parse from calibrator)
-        const cv::Mat& K = calibrator->cameraMatrix();
-        const cv::Mat& D = calibrator->distCoeffs();
-        
+        res->reprojection_error = reproj_error;        
+        const cv::Mat& K = calibrator->cameraIntrinsics(0);
+        const cv::Mat& D = calibrator->distCoeffs(0);    
         res->intrinsics = {K.at<double>(0,0), K.at<double>(1,1), 
-                          K.at<double>(0,2), K.at<double>(1,2)};
-        
+                          K.at<double>(0,2), K.at<double>(1,2)};        
         for (int i = 0; i < D.rows; ++i) {
             res->distortion.push_back(D.at<double>(i, 0));
-        }
-        
+        }                
         RCLCPP_INFO(get_logger(), "Camera %d calibration complete. Reprojection error: %.3f pixels",
-                   cam_id, reproj_error);
-        RCLCPP_INFO(get_logger(), "  Saved to: %s", output_path.c_str());
+                   cam_id, reproj_error);        
     }
     
     void onCalibrateStereo(
@@ -433,55 +420,49 @@ private:
         
         // Get stereo detection data
         std::vector<std::vector<cv::Point2f>> imgPts0, imgPts1;
-        std::vector<std::vector<cv::Point3f>> objPts;
-        
+        std::vector<std::vector<cv::Point3f>> objPts;    
         if (!collector_->getStereoDetections(imgPts0, imgPts1, objPts)) {
             res->success = false;
             res->message = "Insufficient stereo pairs for calibration";
             RCLCPP_ERROR(get_logger(), "%s", res->message.c_str());
             return;
-        }
-        
+        }        
         RCLCPP_INFO(get_logger(), "  Using %zu stereo pairs for calibration", imgPts0.size());
         
-        // Set intrinsics from mono calibrations
-        stereo_cal_->setIntrinsics(
-            mono_cal0_->cameraMatrix(), mono_cal0_->distCoeffs(),
-            mono_cal1_->cameraMatrix(), mono_cal1_->distCoeffs()
-        );
-        
-        // Add views
+        // Init intrinsics from mono calibrations
+        stereo_cal_->setIntrinsics(0, mono_cal0_->cameraIntrinsics(0), mono_cal0_->distCoeffs(0));
+        stereo_cal_->setIntrinsics(1, mono_cal1_->cameraIntrinsics(0), mono_cal1_->distCoeffs(0));        
+
+        // Set views for calibration
         for (size_t i = 0; i < imgPts0.size(); ++i) {
             stereo_cal_->addView(imgPts0[i], imgPts1[i], objPts[i]);
-        }
-        
-        // Calibrate
+        }            
+
+        // Start calibration
         if (!stereo_cal_->calibrate()) {
             res->success = false;
             res->message = "Stereo calibration failed";
             RCLCPP_ERROR(get_logger(), "%s", res->message.c_str());
             return;
-        }
-        
-        // --- Get stereo results ---
-        cv::Mat R, t;  // Rotation & translation from stereo_cal_
-        stereo_cal_->getExtrinsics(R, t);
+        }            
 
+        // Get stereo calibration results
+        cv::Mat R, t;
+        std::optional<Extrinsics> extrinsics = stereo_cal_->getExtrinsics();
+        R = extrinsics->R;
+        t = extrinsics->t;
         cv::Mat rvec;
-        cv::Rodrigues(R, rvec); // Matrice R -> vecteur de rotation
-
+        cv::Rodrigues(R, rvec);
         res->rotation_euler = {
             rvec.at<double>(0,0),
             rvec.at<double>(1,0),
             rvec.at<double>(2,0)
         };
-
         res->baseline_vector = {
             t.at<double>(0,0),
             t.at<double>(1,0),
             t.at<double>(2,0)
         };
-
         res->t_cam1_cam0.fill(0.0);
         for(int i=0; i<3; ++i){
             for(int j=0; j<3; ++j){
@@ -491,6 +472,26 @@ private:
         }
         res->t_cam1_cam0[15] = 1.0;
 
+        // Extract optimized intrinsics - Mono0
+        {
+            const cv::Mat& K = stereo_cal_->cameraIntrinsics(0);
+            const cv::Mat& D = stereo_cal_->distCoeffs(0);    
+            res->intrinsics0 = {K.at<double>(0,0), K.at<double>(1,1), 
+                            K.at<double>(0,2), K.at<double>(1,2)};    
+            for (int i = 0; i < D.rows; ++i) {
+                res->distortion0.push_back(D.at<double>(i, 0));
+            }
+        }
+        // Extract optimized intrinsics - Mono1
+        {
+            const cv::Mat& K = stereo_cal_->cameraIntrinsics(1);
+            const cv::Mat& D = stereo_cal_->distCoeffs(1);
+            res->intrinsics1 = {K.at<double>(0,0), K.at<double>(1,1), 
+                            K.at<double>(0,2), K.at<double>(1,2)};    
+            for (int i = 0; i < D.rows; ++i) {
+                res->distortion1.push_back(D.at<double>(i, 0));
+            }
+        }
         res->success = true;
         res->message = "Stereo calibration completed successfully";
         res->reprojection_error = stereo_cal_->reprojectionError();  // si dispo
@@ -499,52 +500,36 @@ private:
         std::string output_path = req->output_path.empty() ?
             output_dir_ + "/stereo_calibration.yaml" :
             req->output_path;
-
         if (saveStereoCalibration(stereo_cal_, output_path)) {
             res->calibration_file = output_path;
+            RCLCPP_INFO(get_logger(), "  Saved to: %s", output_path.c_str());
         }
 
-        RCLCPP_INFO(get_logger(), "Stereo calibration complete. Reprojection error: %.3f", res->reprojection_error);
-        RCLCPP_INFO(get_logger(), "  Saved to: %s", output_path.c_str());
+        RCLCPP_INFO(get_logger(), "Stereo calibration complete. Reprojection error: %.3f", res->reprojection_error);        
     }
     
+
     // ============================================================================
     // Calibration Saving
     // ============================================================================
     
-    bool saveMonoCalibration(const std::shared_ptr<MonoCalibrator>& cal,
+    bool saveMonoCalibration(const std::shared_ptr<ACalibrator>& cal,
                             const std::string& filepath,
                             int cam_id)
     {
+        const cv::Mat& K = cal->cameraIntrinsics(0);
+        const cv::Mat& D = cal->distCoeffs(0);
+        cv::Size img_size = cal->imageSize();
+
+        YAML::Emitter out;
+        out << YAML::BeginMap;
+        writeCamera(cam_id, K, D, img_size, out);
+        out << YAML::EndMap;
+
         try {
-            YAML::Emitter out;
-            out << YAML::BeginMap;
-            
-            out << YAML::Key << "camera_name" << YAML::Value << ("camera_" + std::to_string(cam_id));
-            out << YAML::Key << "camera_model" << YAML::Value << "double_sphere";  // TODO: Use actual model
-            
-            const cv::Mat& K = cal->cameraMatrix();
-            const cv::Mat& D = cal->distCoeffs();
-            
-            out << YAML::Key << "intrinsics" << YAML::Value << YAML::BeginSeq;
-            out << K.at<double>(0,0) << K.at<double>(1,1) 
-                << K.at<double>(0,2) << K.at<double>(1,2);
-            out << YAML::EndSeq;
-            
-            out << YAML::Key << "distortion_coeffs" << YAML::Value << YAML::BeginSeq;
-            for (int i = 0; i < D.rows; ++i) {
-                out << D.at<double>(i, 0);
-            }
-            out << YAML::EndSeq;
-            
-            out << YAML::Key << "reprojection_error" << YAML::Value << cal->reprojectionError();
-            
-            out << YAML::EndMap;
-            
             std::ofstream file(filepath);
             file << out.c_str();
             file.close();
-            
             return true;
         } catch (const std::exception& e) {
             RCLCPP_ERROR(get_logger(), "Failed to save calibration: %s", e.what());
@@ -552,25 +537,114 @@ private:
         }
     }
     
-    bool saveStereoCalibration(const std::shared_ptr<StereoCalibrator>& cal,
-                              const std::string& filepath)
+    bool writeCamera(int cam_id, const cv::Mat& K, const cv::Mat& D, const cv::Size& img_size, YAML::Emitter& out){
+                        
+            std::string cam_name = "camera_" + std::to_string(cam_id);
+        
+            // Root: "camera_0"
+            out << YAML::Key << cam_name;
+
+            out << YAML::BeginMap; // camera object                        
+            out << YAML::Key << "camera_type" << YAML::Value << "ds";            
+            
+            // intrinsics array
+            out << YAML::Key << "intrinsics";
+            out << YAML::Value << YAML::BeginSeq;
+            out << YAML::BeginMap;
+            out << YAML::Key << "fx" << YAML::Value << K.at<double>(0,0);
+            out << YAML::Key << "fy" << YAML::Value << K.at<double>(1,1);
+            out << YAML::Key << "cx" << YAML::Value << K.at<double>(0,2);
+            out << YAML::Key << "cy" << YAML::Value << K.at<double>(1,2);
+            out << YAML::Key << "xi"    << YAML::Value << (D.rows > 0 ? D.at<double>(0,0) : 0.0);
+            out << YAML::Key << "alpha" << YAML::Value << (D.rows > 1 ? D.at<double>(1,0) : 0.0);
+            out << YAML::EndMap;
+            out << YAML::EndSeq;
+
+            // resolution
+            out << YAML::Key << "resolution";
+            out << YAML::Value << YAML::BeginSeq;     
+            out << YAML::Flow << YAML::BeginSeq;      
+            out << img_size.width << img_size.height;
+            out << YAML::EndSeq;                      
+            out << YAML::EndSeq;
+           
+            out << YAML::EndMap; // camera object
+
+            return true;
+    }
+
+    bool saveStereoCalibration(const std::shared_ptr<ACalibrator>& cal,
+                                const std::string& filepath)
     {
         try {
+            cv::Mat K0, K1, D0, D1;
+            K0 = cal->cameraIntrinsics(0);
+            K1 = cal->cameraIntrinsics(1);
+            D0 = cal->distCoeffs(0);
+            D1 = cal->distCoeffs(1);
+
+            cv::Mat R, T;
+            std::optional<Extrinsics> extrinsics = cal->getExtrinsics();
+            R = extrinsics->R;
+            T = extrinsics->t;
+
+            cv::Size img_size = cal->imageSize();
+
+            // Build T_BS 4x4 matrix
+            cv::Mat T_BS = cv::Mat::eye(4, 4, CV_64F);
+            R.copyTo(T_BS(cv::Rect(0, 0, 3, 3)));
+            T.copyTo(T_BS(cv::Rect(3, 0, 1, 3)));
+
+            // Convert R -> rotvec
+            cv::Mat rotvec;
+            cv::Rodrigues(R, rotvec);
+
             YAML::Emitter out;
-            out << YAML::BeginMap;
-            
-            out << YAML::Key << "stereo_calibration" << YAML::Value << YAML::BeginMap;
-            out << YAML::Key << "baseline" << YAML::Value << 0.12;  // TODO: Extract actual baseline
-            // TODO: Add transformation matrix, rotation, translation
+            out << YAML::BeginMap; // ROOT
+
+            // Write both cameras using shared function
+            writeCamera(0, K0, D0, img_size, out);
+            writeCamera(1, K1, D1, img_size, out);
+
+            // ===== T_BS =====
+            out << YAML::Key << "T_BS";
+            out << YAML::Value << YAML::BeginMap;
+
+            out << YAML::Key << "cols" << YAML::Value << 4;
+            out << YAML::Key << "rows" << YAML::Value << 4;
+            out << YAML::Key << "data" << YAML::Value << YAML::BeginSeq;
+
+            for (int r = 0; r < 4; ++r)
+                for (int c = 0; c < 4; ++c)
+                    out << T_BS.at<double>(r, c);
+
+            out << YAML::EndSeq;
             out << YAML::EndMap;
-            
-            out << YAML::EndMap;
-            
+
+            // ===== ROTVEC =====
+            out << YAML::Key << "rotvec";
+            out << YAML::Value << YAML::BeginSeq;
+            out << rotvec.at<double>(0)
+                << rotvec.at<double>(1)
+                << rotvec.at<double>(2);
+            out << YAML::EndSeq;
+
+            // ===== TVEC =====
+            out << YAML::Key << "tvec";
+            out << YAML::Value << YAML::BeginSeq;
+            out << T.at<double>(0)
+                << T.at<double>(1)
+                << T.at<double>(2);
+            out << YAML::EndSeq;
+
+            out << YAML::EndMap; // ROOT END
+
             std::ofstream file(filepath);
             file << out.c_str();
             file.close();
-            
+
             return true;
+
         } catch (const std::exception& e) {
             RCLCPP_ERROR(get_logger(), "Failed to save stereo calibration: %s", e.what());
             return false;
@@ -598,3 +672,4 @@ int main(int argc, char** argv)
     rclcpp::shutdown();
     return 0;
 }
+

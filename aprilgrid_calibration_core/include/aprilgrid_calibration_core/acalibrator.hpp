@@ -12,9 +12,18 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <optional>
 
 #include "aprilgrid_calibration_core/projections_double_sphere.hpp"
 #include "aprilgrid_calibration_core/camera_model.hpp"
+
+
+struct Extrinsics {
+    cv::Mat R;
+    cv::Mat t;
+};
+
+
 
 class ACalibrator
 {
@@ -26,10 +35,37 @@ public:
 
     CameraModel model() const { return model_; }
     cv::Size imageSize() const { return image_size_; }
-    
+
+    void setIntrinsics(size_t ind, const cv::Mat& K, const cv::Mat& D){
+        K_.at(ind) = K.clone();
+        D_.at(ind) = D.clone();
+    }
+
+    const cv::Mat& cameraIntrinsics(size_t ind) const {
+        return K_.at(ind);
+    }
+
+    const cv::Mat& distCoeffs(size_t ind) const {
+        return D_.at(ind);
+    }
+
+    virtual std::optional<Extrinsics> getExtrinsics() const = 0;
+
     double reprojectionError() const {return reproj_error_; }
 
 protected:
+
+    std::vector<cv::Mat> K_{2};
+    std::vector<cv::Mat> D_{2};   
+
+
+
+    double computeRMSE(const ceres::Solver::Summary& summary)
+    {
+        if (summary.num_residuals == 0) return std::numeric_limits<double>::infinity();
+        return std::sqrt(2.0 * summary.final_cost / summary.num_residuals);
+    }
+
 
     void displayIntrinsics(double* intrinsics, CameraModel model){
         if(model == CameraModel::DOUBLE_SPHERE){
@@ -42,6 +78,43 @@ protected:
             std::cout << "alpha = " << intrinsics[5] << std::endl;
         }
     };
+
+    void displayIntrinsics(double* intrinsics, CameraModel model, double* cov){
+        if(model == CameraModel::DOUBLE_SPHERE){
+            std::cout << "Intrinsics:" << std::endl;
+            std::cout << "fx_0  = " << intrinsics[0] << " +/- " << std::sqrt(cov[0]) <<  std::endl;
+            std::cout << "fy_0  = " << intrinsics[1] << " +/- " << std::sqrt(cov[7]) <<  std::endl;
+            std::cout << "cx_0  = " << intrinsics[2] << " +/- " << std::sqrt(cov[14]) <<  std::endl;
+            std::cout << "cy_0  = " << intrinsics[3] << " +/- " << std::sqrt(cov[21]) <<  std::endl;
+            std::cout << "xi    = " << intrinsics[4] << " +/- " << std::sqrt(cov[28]) <<  std::endl;
+            std::cout << "alpha = " << intrinsics[5] << " +/- " << std::sqrt(cov[35]) <<  std::endl;
+        }
+    };
+
+
+    void displayExtrinsics(std::array<double,6> extrinsics){
+        
+        std::cout << "Extrinsics:" << std::endl;
+        std::cout << "rx  = " << extrinsics[0] << std::endl;
+        std::cout << "ry  = " << extrinsics[1] << std::endl;
+        std::cout << "rz  = " << extrinsics[2] << std::endl;
+        std::cout << "tx  = " << extrinsics[3] << std::endl;
+        std::cout << "ty  = " << extrinsics[4] << std::endl;
+        std::cout << "tz  = " << extrinsics[5] << std::endl;
+
+    };
+
+    void displayExtrinsics(std::array<double,6> extrinsics, double* cov){        
+        std::cout << "Extrinsics:" << std::endl;
+        std::cout << "rx  = " << extrinsics[0] << " +/- " << std::sqrt(cov[0]) <<  std::endl;
+        std::cout << "ry  = " << extrinsics[1] << " +/- " << std::sqrt(cov[7]) <<  std::endl;
+        std::cout << "rz  = " << extrinsics[2] << " +/- " << std::sqrt(cov[14]) <<  std::endl;
+        std::cout << "tx  = " << extrinsics[3] << " +/- " << std::sqrt(cov[21]) <<  std::endl;
+        std::cout << "ty  = " << extrinsics[4] << " +/- " << std::sqrt(cov[28]) <<  std::endl;
+        std::cout << "tz  = " << extrinsics[5] << " +/- " << std::sqrt(cov[35]) <<  std::endl;        
+    };
+
+
 
     void savePointsToCSV(
         const std::vector<std::vector<cv::Point3f>>& object_points,
@@ -100,6 +173,25 @@ protected:
     CameraModel model_;
     double reproj_error_ = -1.0;
 };
+
+
+
+
+struct PriorResidual {
+    PriorResidual(double mean, double sigma, int index) : mean(mean), sigma(sigma), index(index) {}
+
+    template <typename T>
+    bool operator()(const T* const x, T* residual) const {
+        // x = bloc entier (6 paramètres), on n'utilise que x[index]
+        residual[0] = (x[index] - T(mean)) / T(sigma);
+        return true;
+    }
+
+    double mean; // valeur cible
+    double sigma; // incertitude
+    int index;   // indice dans le bloc (0..5)
+};
+
 
 
 #endif // ACALIBRATOR_HPP

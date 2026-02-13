@@ -26,12 +26,12 @@ def generate_launch_description():
 
     tag_size_arg = DeclareLaunchArgument(
         "tag_size",
-        default_value="0.5",
+        default_value="0.05",
         description="Tag size in meters"
     )
 
-    fx_arg = DeclareLaunchArgument("fx", default_value="600.0")
-    fy_arg = DeclareLaunchArgument("fy", default_value="600.0")
+    fx_arg = DeclareLaunchArgument("fx", default_value="300.0")
+    fy_arg = DeclareLaunchArgument("fy", default_value="300.0")
     px_arg = DeclareLaunchArgument("px", default_value="320.0")
     py_arg = DeclareLaunchArgument("py", default_value="240.0")
 

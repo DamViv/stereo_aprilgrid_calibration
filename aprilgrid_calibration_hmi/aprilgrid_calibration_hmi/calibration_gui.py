@@ -82,22 +82,26 @@ class CalibrationWindow(QMainWindow):
         self.cam0_tab = QTabWidget()
         self.cam0_raw_label = QLabel("Raw")
         self.cam0_anno_label = QLabel("Detection")
-        for lbl in [self.cam0_raw_label, self.cam0_anno_label]:
+        self.cam0_corr_label = QLabel("Corrected")
+        for lbl in [self.cam0_raw_label, self.cam0_anno_label, self.cam0_corr_label]:
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setMinimumSize(320, 240)
         self.cam0_tab.addTab(self.cam0_raw_label, "Raw")
         self.cam0_tab.addTab(self.cam0_anno_label, "Detection")
+        self.cam0_tab.addTab(self.cam0_corr_label, "Corrected")
         layout.addWidget(self.cam0_tab, 0, 0)
 
         # ---------------- Cam1 Tabs ----------------
         self.cam1_tab = QTabWidget()
         self.cam1_raw_label = QLabel("Raw")
         self.cam1_anno_label = QLabel("Detection")
-        for lbl in [self.cam1_raw_label, self.cam1_anno_label]:
+        self.cam1_corr_label = QLabel("Corrected")
+        for lbl in [self.cam1_raw_label, self.cam1_anno_label, self.cam1_corr_label]:
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setMinimumSize(320, 240)
         self.cam1_tab.addTab(self.cam1_raw_label, "Raw")
         self.cam1_tab.addTab(self.cam1_anno_label, "Detection")
+        self.cam1_tab.addTab(self.cam1_corr_label, "Corrected")
         layout.addWidget(self.cam1_tab, 0, 1)
 
         # ---------------- Stats ----------------
@@ -125,7 +129,7 @@ class CalibrationWindow(QMainWindow):
         calib_box = QGroupBox("Calibration")
         calib_layout = QHBoxLayout()
 
-        # --- Cam0 ---
+        # --- Cam0 calib ---
         cam0_layout = QVBoxLayout()
         self.btn_calib_cam0 = QPushButton("Calibrate Cam0")
         self.calib_results_cam0_text = QLabel("No calibration yet")
@@ -135,7 +139,7 @@ class CalibrationWindow(QMainWindow):
         cam0_layout.addWidget(self.calib_results_cam0_text)
         calib_layout.addLayout(cam0_layout)
 
-        # --- Cam1 ---
+        # --- Cam1 calib ---
         cam1_layout = QVBoxLayout()
         self.btn_calib_cam1 = QPushButton("Calibrate Cam1")
         self.calib_results_cam1_text = QLabel("No calibration yet")
@@ -145,7 +149,7 @@ class CalibrationWindow(QMainWindow):
         cam1_layout.addWidget(self.calib_results_cam1_text)
         calib_layout.addLayout(cam1_layout)
 
-        # --- Stereo ---
+        # --- Stereo calib ---
         stereo_layout = QVBoxLayout()
         self.btn_calib_stereo = QPushButton("Calibrate Stereo")
         self.calib_results_stereo_text = QLabel("No calibration yet")
@@ -174,133 +178,6 @@ class CalibrationWindow(QMainWindow):
         self.btn_calib_stereo.clicked.connect(self.calibrate_stereo)
 
         central.setLayout(layout)
-
-
-    # def build_ui(self):
-    #     central = QWidget()
-    #     self.setCentralWidget(central)
-    #     layout = QGridLayout()
-
-    #     # --- Cam0 Tabs ---
-    #     self.cam0_tab = QTabWidget()
-    #     self.cam0_raw_label = QLabel("Raw")
-    #     self.cam0_anno_label = QLabel("Detection")
-    #     self.cam0_raw_label.setAlignment(Qt.AlignCenter)
-    #     self.cam0_anno_label.setAlignment(Qt.AlignCenter)
-    #     self.cam0_raw_label.setMinimumSize(320, 240)
-    #     self.cam0_anno_label.setMinimumSize(320, 240)
-    #     self.cam0_tab.addTab(self.cam0_raw_label, "Raw")
-    #     self.cam0_tab.addTab(self.cam0_anno_label, "Detection")
-    #     layout.addWidget(self.cam0_tab, 0, 0)
-
-    #     # --- Cam1 Tabs ---
-    #     self.cam1_tab = QTabWidget()
-    #     self.cam1_raw_label = QLabel("Raw")
-    #     self.cam1_anno_label = QLabel("Detection")
-    #     self.cam1_raw_label.setAlignment(Qt.AlignCenter)
-    #     self.cam1_anno_label.setAlignment(Qt.AlignCenter)
-    #     self.cam1_raw_label.setMinimumSize(320, 240)
-    #     self.cam1_anno_label.setMinimumSize(320, 240)
-    #     self.cam1_tab.addTab(self.cam1_raw_label, "Raw")
-    #     self.cam1_tab.addTab(self.cam1_anno_label, "Detection")
-    #     layout.addWidget(self.cam1_tab, 0, 1)
-
-
-    #     # self.cam0_label = QLabel("Camera 0")
-    #     # self.cam1_label = QLabel("Camera 1")
-    #     # self.cam0_label.setAlignment(Qt.AlignCenter)
-    #     # self.cam1_label.setAlignment(Qt.AlignCenter) 
-    #     # self.cam0_label.setMinimumSize(320,240)       
-    #     # self.cam1_label.setMinimumSize(320,240)        
-
-    #     # layout.addWidget(self.cam0_label, 0, 0)
-    #     # layout.addWidget(self.cam1_label, 0, 1)
-
-    #     # Frame counters
-    #     self.cam0_frames_label = QLabel("0")
-    #     self.cam1_frames_label = QLabel("0")
-    #     self.stereo_pairs_label = QLabel("0")
-
-    #     # Ready flags
-    #     self.cam0_ready_label = QLabel("❌")
-    #     self.cam1_ready_label = QLabel("❌")
-    #     self.stereo_ready_label = QLabel("❌")
-
-
-    #     # Mode & collecting
-    #     layout = self.build_stats_ui(layout)
-        
-    #     control_box = QGroupBox("Controls")
-    #     control_layout = QHBoxLayout()
-
-    #     self.collecting_mono0 = False
-    #     self.collecting_mono1 = False
-    #     self.collecting_stereo = False
-    #     self.btn_start_mono0 = QPushButton("Start Mono Cam0", self)
-    #     self.btn_start_mono1 = QPushButton("Start Mono Cam1", self)
-    #     self.btn_start_stereo = QPushButton("Start Stereo", self)        
-    #     self.btn_clear = QPushButton("Clear Frames")
-
-    #     control_layout.addWidget(self.btn_start_mono0)
-    #     control_layout.addWidget(self.btn_start_mono1)
-    #     control_layout.addWidget(self.btn_start_stereo)        
-    #     control_layout.addWidget(self.btn_clear)
-
-    #     control_box.setLayout(control_layout)
-    #     layout.addWidget(control_box, 2, 0, 1, 2)
-
-    #     calib_box = QGroupBox("Calibration")
-        
-    #     # Layout parent horizontal pour les 3 calibrations
-    #     calib_layout = QHBoxLayout()
-
-    #     # --- Cam0 ---
-    #     cam0_layout = QVBoxLayout()
-    #     self.btn_calib_cam0 = QPushButton("Calibrate Cam0")
-    #     self.calib_results_cam0_text = QLabel("No calibration yet")
-    #     self.calib_results_cam0_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-    #     cam0_layout.addWidget(self.btn_calib_cam0)
-    #     cam0_layout.addWidget(self.calib_results_cam0_text)
-    #     calib_layout.addLayout(cam0_layout)
-
-    #     # --- Cam1 ---
-    #     cam1_layout = QVBoxLayout()
-    #     self.btn_calib_cam1 = QPushButton("Calibrate Cam1")
-    #     self.calib_results_cam1_text = QLabel("No calibration yet")
-    #     self.calib_results_cam1_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-    #     cam1_layout.addWidget(self.btn_calib_cam1)
-    #     cam1_layout.addWidget(self.calib_results_cam1_text)
-    #     calib_layout.addLayout(cam1_layout)
-
-    #     # --- Stereo ---
-    #     stereo_layout = QVBoxLayout()
-    #     self.btn_calib_stereo = QPushButton("Calibrate Stereo")
-    #     self.calib_results_stereo_text = QLabel("No calibration yet")
-    #     self.calib_results_stereo_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-    #     stereo_layout.addWidget(self.btn_calib_stereo)
-    #     stereo_layout.addWidget(self.calib_results_stereo_text)
-    #     calib_layout.addLayout(stereo_layout)
-
-    #     # Ajouter le tout dans un GroupBox
-    #     calib_box = QGroupBox("Calibration")
-    #     calib_box.setLayout(calib_layout)
-
-    #     # Ajouter le GroupBox dans le layout principal
-    #     layout.addWidget(calib_box, 3, 0, 1, 2)
-
-
-    #     # buttons        
-    #     self.btn_start_mono0.clicked.connect(self.toggle_mono0_collection)
-        
-    #     self.btn_start_mono1.clicked.connect(self.toggle_mono1_collection)
-
-    #     self.btn_start_stereo.clicked.connect(self.toggle_stereo_collection)
-        
-    #     self.btn_clear.clicked.connect(self.clear_frames)
-
-    #     self.btn_calib_cam0.clicked.connect(lambda: self.calibrate_camera(0))
-    #     self.btn_calib_cam1.clicked.connect(lambda: self.calibrate_camera(1))
-    #     self.btn_calib_stereo.clicked.connect(self.calibrate_stereo)
 
 
     def build_stats_ui(self, parent_layout):
@@ -408,6 +285,9 @@ class CalibrationWindow(QMainWindow):
         n.create_subscription(Image, "/cam_0/apriltags_img", self.anno0_cb, qos_profile_sensor_data)
         n.create_subscription(Image, "/cam_1/apriltags_img", self.anno1_cb, qos_profile_sensor_data)
 
+        n.create_subscription(Image, "/cam_0/image_corrected", self.image0_corr_cb, qos_profile_sensor_data)
+        n.create_subscription(Image, "/cam_1/image_corrected", self.image1_corr_cb, qos_profile_sensor_data)
+
         n.create_subscription(AprilTagArray, "/cam_0/apriltags", self.tags0_cb, qos_profile_sensor_data)
         n.create_subscription(AprilTagArray, "/cam_1/apriltags", self.tags1_cb, qos_profile_sensor_data)
 
@@ -426,6 +306,12 @@ class CalibrationWindow(QMainWindow):
 
     def image1_cb(self, msg):
         self.last_img1 = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+
+    def image0_corr_cb(self, msg):
+        self.last_img0_corr = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+
+    def image1_corr_cb(self, msg):
+        self.last_img1_corr = self.bridge.imgmsg_to_cv2(msg, "bgr8")
 
     def anno0_cb(self, msg):
         self.last_anno0 = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -513,6 +399,11 @@ class CalibrationWindow(QMainWindow):
             pix = pix.scaled(self.cam0_anno_label.width(), self.cam0_anno_label.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.cam0_anno_label.setPixmap(pix)
 
+        if hasattr(self, "last_img0_corr") and self.last_img0_corr is not None:
+            pix = self.cv_to_pixmap(self.last_img0_corr)
+            pix = pix.scaled(self.cam0_corr_label.width(), self.cam0_corr_label.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.cam0_corr_label.setPixmap(pix)
+
         # Cam1
         if hasattr(self, "last_img1") and self.last_img1 is not None:
             pix = self.cv_to_pixmap(self.last_img1)
@@ -524,7 +415,10 @@ class CalibrationWindow(QMainWindow):
             pix = pix.scaled(self.cam1_anno_label.width(), self.cam1_anno_label.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.cam1_anno_label.setPixmap(pix)
 
-        
+        if hasattr(self, "last_img1_corr") and self.last_img1_corr is not None:
+            pix = self.cv_to_pixmap(self.last_img1_corr)
+            pix = pix.scaled(self.cam1_corr_label.width(), self.cam1_corr_label.height(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.cam1_corr_label.setPixmap(pix)
 
     def cv_to_pixmap(self, img):
         h, w, ch = img.shape
@@ -685,15 +579,34 @@ class CalibrationWindow(QMainWindow):
                 txt += f"  tz: {res.baseline_vector[2]:.5f}\n"
 
             # Matrice 4x4
-            if hasattr(res, "t_cam1_cam0") and len(res.t_cam1_cam0) == 16:
+            if hasattr(res, "RT_stereo") and len(res.t_cam1_cam0) == 16:
                 txt += "\n4x4 Matrix (Cam1->Cam0):\n"
                 for i in range(4):
                     row = res.t_cam1_cam0[i*4:(i+1)*4]
                     txt += "  " + " ".join(f"{v: .5f}" for v in row) + "\n"
 
-
         self.calib_results_stereo_text.setText(txt)
 
+        # Add optimised mono intrinsics
+        if hasattr(res, "intrinsics0"):
+            txt = self.calib_results_cam0_text.text()
+            txt += "============ After Stereo Optim ================\n"            
+            txt += f"fx: {res.intrinsics0[0]:.3f}\n"
+            txt += f"fy: {res.intrinsics0[1]:.3f}\n"
+            txt += f"cx: {res.intrinsics0[2]:.3f}\n"
+            txt += f"cy: {res.intrinsics0[3]:.3f}\n"
+            txt += "Distortion: " + ", ".join([f"{d:.6f}" for d in res.distortion0])
+            self.calib_results_cam0_text.setText(txt)
+
+        if hasattr(res, "intrinsics1"):
+            txt = self.calib_results_cam1_text.text()
+            txt += "\n============ After Stereo Optim ================\n"            
+            txt += f"fx: {res.intrinsics1[0]:.3f}\n"
+            txt += f"fy: {res.intrinsics1[1]:.3f}\n"
+            txt += f"cx: {res.intrinsics1[2]:.3f}\n"
+            txt += f"cy: {res.intrinsics1[3]:.3f}\n"
+            txt += "Distortion: " + ", ".join([f"{d:.6f}" for d in res.distortion1])
+            self.calib_results_cam1_text.setText(txt)
 
 
 # ---------- Main ----------

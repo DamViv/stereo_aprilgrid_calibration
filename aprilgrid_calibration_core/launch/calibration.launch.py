@@ -10,9 +10,11 @@ import os
 def generate_launch_description():
     # Get package directories
     core_pkg_dir = get_package_share_directory('aprilgrid_calibration_core')    
-    
+    ds_pkg_dir = get_package_share_directory('double_sphere_corrector')
+
     # Config files
     calibration_config = os.path.join(core_pkg_dir, 'config', 'calibration_params.yaml')       
+    stereo_calibration_file = os.path.join(ds_pkg_dir, 'calib', 'stereo_calibration.yaml') 
 
     # AprilGrid Detector for Cam0
     detector = Node(
@@ -47,8 +49,23 @@ def generate_launch_description():
         output='screen'
     )
     
+    # Calibration GUI
+    stereo_3D_reconstruction = Node(
+        package='double_sphere_corrector',
+        executable='ds_corrector',
+        name='ds_corrector',
+        parameters=[{
+            'img_left_topic': '/cam_0/image_raw',
+            'img_right_topic': '/cam_1/image_raw',
+            'output_topic': '/cam_0/apriltags,/cam_1/apriltags',
+            'stereo_config_file': stereo_calibration_file,
+        }],
+        output='screen'
+    )
+
     return LaunchDescription([
         detector,        
         calibration_manager,
         calibration_gui,
+        # stereo_3D_reconstruction,
     ])

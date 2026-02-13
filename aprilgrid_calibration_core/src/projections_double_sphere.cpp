@@ -1,82 +1,62 @@
 #include "../include/aprilgrid_calibration_core/projections_double_sphere.hpp"
 
-// Projection equirectangular
-cv::Mat generateEquirectangular(const cv::Mat& img, const cv::Mat& K, const cv::Mat& D, int width, int height) {
-    cv::Mat map_x(height, width, CV_32F);
-    cv::Mat map_y(height, width, CV_32F);
+#include <opencv2/opencv.hpp>
+#include <iostream>
+#include <cmath>
 
-    double* intrinsics = new double[6];
-    intrinsics[0] = K.at<double>(0,0); // fx
-    intrinsics[1] = K.at<double>(1,1); // fy
-    intrinsics[2] = K.at<double>(0,2); // cx
-    intrinsics[3] = K.at<double>(1,2); // cy
-    intrinsics[4] = D.at<double>(0);   // xi
-    intrinsics[5] = D.at<double>(1);   // alpha
+// Assumes you have a DSCamera class with world2cam method
+// bool DSCamera::world2cam(const cv::Vec3f& point3D, cv::Vec2f& uv);
 
-    for(int j=0; j<height; j++){
-        double phi = 2*M_PI/3 * (0.5 - static_cast<double>(j)/height); // latitude [-pi/2, pi/2]
+void showDSCorrected(const cv::Mat& img, const cv::Mat& K, const cv::Mat &D, const double &fov,
+                     const std::string& mode,
+                     cv::Size out_size,
+                     float f_persp)
+{
+    cv::Mat mapX, mapY;
+    mapX = cv::Mat(out_size, CV_32F);
+    mapY = cv::Mat(out_size, CV_32F);
 
-        for(int i=0; i<width; i++){
-            double theta = M_PI * (static_cast<double>(i)/width - 0.5); // longitude [-pi, pi]
+    int h = out_size.height;
+    int w = out_size.width;
 
-            // Coordonnées unitaires en caméra
-            double x = cos(phi) * sin(theta);
-            double y = sin(phi);
-            double z = cos(phi) * cos(theta);
-            cv::Vec3d P(x,y,z);
+    for(int r=0; r<h; r++){
+        for(int c=0; c<w; c++){
+            cv::Vec3d ray;
 
-            // Projection DS
-            double u, v;
-            projectDoubleSphere(P[0], P[1], P[2], intrinsics, u, v);            
+            if(mode == "perspective"){
+                float z = f_persp * std::min(w,h);
+                float x = c - w/2.0f;
+                float y = r - h/2.0f;
+                ray = cv::Vec3d(x, y, z);
+                ray = ray / cv::norm(ray);
+            }
+            else if(mode == "equirect"){
+                float theta = -M_PI/2.0 + (r+0.5f) * M_PI / h;
+                float phi   = -M_PI   + (c+0.5f) * 2*M_PI / w;
+                float x = std::sin(phi) * std::cos(theta);
+                float y = std::sin(theta);
+                float z = std::cos(phi) * std::cos(theta);
+                ray = cv::Vec3d(x, y, z);
+            }
+            else{
+                std::cerr << "Unknown mode " << mode << std::endl;
+                return;
+            }
 
-            map_x.at<float>(j,i) = u;
-            map_y.at<float>(j,i) = v;
+            cv::Vec2d uv;
+            double intrinsics[6] = {K.at<double>(0,0), K.at<double>(1,1), K.at<double>(0,2), K.at<double>(1,2), D.at<double>(0,0), D.at<double>(0,1)};
+            projectDoubleSphere(ray[0], ray[1], ray[2], intrinsics, uv[0], uv[1]);
+                        
+            mapX.at<float>(r,c) = static_cast<float>(uv[0]);
+            mapY.at<float>(r,c) = static_cast<float>(uv[1]);
+
+            
         }
     }
 
-    cv::Mat equi;
-    cv::remap(img, equi, map_x, map_y, cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0));
-    return equi;
-}
+    cv::Mat corrected;
+    cv::remap(img, corrected, mapX, mapY, cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0,0,0));
 
-
-cv::Mat undistortDoubleSphere(const cv::Mat& img, const cv::Mat& K, const cv::Mat& D) {
-    cv::Mat map_x(img.rows, img.cols, CV_32F);
-    cv::Mat map_y(img.rows, img.cols, CV_32F);
-
-    double fx = K.at<double>(0,0);
-    double fy = K.at<double>(1,1);
-    double cx = K.at<double>(0,2);
-    double cy = K.at<double>(1,2);
-    double xi = D.at<double>(0);
-    double alpha = D.at<double>(1);
-    
-    // Nouvelle matrice (ajuster scale si besoin)
-    double fx_new = fx * 0.6;  // Réduire pour voir plus
-    double fy_new = fy * 0.6;
-    double cx_new = img.cols / 2.0;
-    double cy_new = img.rows / 2.0;
-
-    for(double v = 0; v < img.rows; v++) {
-        for(double u = 0; u < img.cols; u++) {
-            // Unprojection perspective
-            double x = (u - cx_new) / fx_new;
-            double y = (v - cy_new) / fy_new;
-            double z = 1.0;
-            
-            // Normaliser
-            double norm = sqrt(x*x + y*y + z*z);
-            x /= norm; y /= norm; z /= norm;
-            
-            // Reprojection Double Sphere
-            projectDoubleSphere(x, y, z, new double[6]{fx, fy, cx, cy, xi, alpha}, u, v);
-                            
-            map_x.at<float>(v, u) = u;
-            map_y.at<float>(v, u) = v;            
-        }
-    }
-
-    cv::Mat undistorted;
-    cv::remap(img, undistorted, map_x, map_y, cv::INTER_LINEAR);
-    return undistorted;
+    cv::imshow("DS Corrected", corrected);
+    cv::waitKey(1);
 }

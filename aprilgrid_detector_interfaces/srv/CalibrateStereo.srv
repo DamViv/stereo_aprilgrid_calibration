@@ -14,3 +14,11 @@ string calibration_file          # Path to saved stereo calibration YAML
 float64[16] t_cam1_cam0         # 4x4 transformation matrix (row-major)
 float64[3] baseline_vector      # Translation vector
 float64[3] rotation_euler       # Roll, pitch, yaw in radians
+
+float64 reprojection_error0
+float64[] intrinsics0             # Flattened intrinsic parameters
+float64[] distortion0             # Distortion coefficients
+
+float64 reprojection_error1
+float64[] intrinsics1             # Flattened intrinsic parameters
+float64[] distortion1             # Distortion coefficients

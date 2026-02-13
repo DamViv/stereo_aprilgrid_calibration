@@ -29,9 +29,9 @@ include_directories(
 
 # Library: calibration core (frame collector, calibrators, etc.)
 add_library(${PROJECT_NAME}_lib
-  src/frame_collector.cpp
-  src/mono_calibrator.cpp
-  src/stereo_calibrator.cpp
+  src/frame_collector.cpp  
+  src/mono_calibrator_ds.cpp
+  src/stereo_calibrator_ds.cpp
   src/projections_double_sphere.cpp
 )
 
