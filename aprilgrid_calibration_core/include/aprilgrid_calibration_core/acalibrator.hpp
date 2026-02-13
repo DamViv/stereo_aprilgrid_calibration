@@ -14,7 +14,6 @@
 #include <iomanip>
 #include <optional>
 
-#include "aprilgrid_calibration_core/projections_double_sphere.hpp"
 #include "aprilgrid_calibration_core/camera_model.hpp"
 
 

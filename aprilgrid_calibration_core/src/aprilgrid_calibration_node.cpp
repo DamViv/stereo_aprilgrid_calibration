@@ -1,5 +1,6 @@
 #include <rclcpp/rclcpp.hpp>
-#include "aprilgrid_calibration_core/frame_grabber.hpp"
+//#include "aprilgrid_calibration_core/frame_grabber.hpp"
+#include "aprilgrid_calibration_core/frame_collector.hpp"
 #include "aprilgrid_calibration_core/mono_calibrator.hpp"
 #include "aprilgrid_calibration_core/stereo_calibrator.hpp"
 #include "aprilgrid_calibration_core/camera_model.hpp"
@@ -17,7 +18,7 @@ public:
         int width  = this->declare_parameter<int>("image_width", 1280);
         int height = this->declare_parameter<int>("image_height", 1024);
         
-        frame_grabber_ = std::make_shared<FrameGrabber>(this->get_logger());        
+        frame_grabber_ = std::make_shared<FrameCollector>(this->get_logger());        
         frame_grabber_->setImageSize(width, height);
         
         mono_calibrator0_ = std::make_shared<MonoCalibrator>(width, height, CameraModel::DOUBLE_SPHERE);
@@ -51,7 +52,7 @@ public:
     }
 
 private:
-    std::shared_ptr<FrameGrabber> frame_grabber_;
+    std::shared_ptr<FrameCollector> frame_grabber_;
     std::shared_ptr<MonoCalibrator> mono_calibrator0_;
     std::shared_ptr<MonoCalibrator> mono_calibrator1_;
     std::shared_ptr<StereoCalibrator> stereo_calibrator_;

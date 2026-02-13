@@ -49,6 +49,11 @@ public:
         _sr = std::make_shared<sphericRectification>(stereo_config_file_);
 
         // publishers
+        image_rect_pub_l_ = this->create_publisher<sensor_msgs::msg::Image>(
+            "/cam_0/image_corrected", 10);
+        image_rect_pub_r_ = this->create_publisher<sensor_msgs::msg::Image>(
+            "/cam_1/image_corrected", 10);
+
         pointcloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
             "/stereo/pointcloud", 10);
         depth_img_pub_ = this->create_publisher<sensor_msgs::msg::Image>(
@@ -77,11 +82,13 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_img_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub_;
 
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_rect_pub_l_, image_rect_pub_r_;
+
 
     void imageCallback1(const sensor_msgs::msg::Image &msg) {
         cv_bridge::CvImagePtr cv_ptr;
         try {
-            cv_ptr = cv_bridge::toCvCopy(msg, "mono8");
+            cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
         } catch (cv_bridge::Exception &e) {
             RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
             return;
@@ -97,7 +104,7 @@ private:
     void imageCallback2(const sensor_msgs::msg::Image &msg) {
         cv_bridge::CvImagePtr cv_ptr;
         try {
-            cv_ptr = cv_bridge::toCvCopy(msg, "mono8");
+            cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
         } catch (cv_bridge::Exception &e) {
             RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
             return;
@@ -126,12 +133,12 @@ private:
             }
         }
 
-        if (best_dt < max_time_delta_) {
+        if (best_dt < max_time_delta_) {            
             auto matched = other_buffer[best_index];
             if (left)
-                processStereo3D(f.second, matched.second);
+                processStereo3D(f, matched);
             else
-                processStereo3D(matched.second, f.second);        
+                processStereo3D(matched, f);        
             other_buffer.erase(other_buffer.begin() + best_index);
             return true;
         }
@@ -140,58 +147,74 @@ private:
     }
 
 
-    void processStereo3D(cv::Mat left, cv::Mat right){
+    void processStereo3D(std::pair<rclcpp::Time, cv::Mat>& f_left, std::pair<rclcpp::Time, cv::Mat>& f_right){
         
-        cv::imshow("left", left);
-        cv::imshow("right", right);
-        cv::waitKey(1);        
+        // cv::imshow("left", f_left.second);
+        // cv::imshow("right", f_right.second);
+        // cv::waitKey(1);        
 
-        _sr->processImages(left, right);
+        cv::Mat Il_rect, Ir_rect;
+        _sr->processImages(f_left.second, f_right.second, Il_rect, Ir_rect);
+        
+
+        cv_bridge::CvImage cv_img;        
+        cv_img.header.frame_id = "camera_frame";  // frame_id
+        cv_img.encoding = sensor_msgs::image_encodings::BGR8;  // ou MONO8 si gris
+        
+        cv_img.header.stamp = f_left.first; 
+        cv_img.image = Il_rect;
+        image_rect_pub_l_->publish(*cv_img.toImageMsg());
+        
+        cv_img.header.stamp = f_right.first;  
+        cv_img.image = Ir_rect;
+        image_rect_pub_r_->publish(*cv_img.toImageMsg());
+
+
         return;
         
-        // Downsample image
-        cv::Mat small_left_img, small_right_img;
-        cv::resize(left, small_left_img, cv::Size(), 1, 1);
-        cv::resize(right, small_right_img, cv::Size(), 1, 1);
+        // // Downsample image
+        // cv::Mat small_left_img, small_right_img;
+        // cv::resize(left, small_left_img, cv::Size(), 1, 1);
+        // cv::resize(right, small_right_img, cv::Size(), 1, 1);
 
-        cv::imshow("left", left);
+        // cv::imshow("left", left);
 
-        cv::Mat rect_imgl, rect_imgr;
-        cv::remap(small_left_img, rect_imgl, _ds->smap[0][0], _ds->smap[0][1], 1, 0);
-        cv::remap(small_right_img, rect_imgr, _ds->smap[1][0], _ds->smap[1][1], 1, 0);
+        // cv::Mat rect_imgl, rect_imgr;
+        // cv::remap(small_left_img, rect_imgl, _ds->smap[0][0], _ds->smap[0][1], 1, 0);
+        // cv::remap(small_right_img, rect_imgr, _ds->smap[1][0], _ds->smap[1][1], 1, 0);
 
-        cv::imshow("rect_imgl", rect_imgl);
-        cv::waitKey(1);
+        // cv::imshow("rect_imgl", rect_imgl);
+        // cv::waitKey(1);
 
-        cv::imshow("rect_imgr", rect_imgr);
-        cv::waitKey(1);
+        // cv::imshow("rect_imgr", rect_imgr);
+        // cv::waitKey(1);
 
-        // // Disparity computation
-        cv::Mat disp_img, depth_map;
-        _ds->DisparityImage(rect_imgl, rect_imgr, disp_img, depth_map);
+        // // // Disparity computation
+        // cv::Mat disp_img, depth_map;
+        // _ds->DisparityImage(rect_imgl, rect_imgr, disp_img, depth_map);
 
-        // // Depth image filtering
-        cv::Mat depth_filtered;
-        cv::medianBlur(depth_map, depth_filtered, 5);
+        // // // Depth image filtering
+        // cv::Mat depth_filtered;
+        // cv::medianBlur(depth_map, depth_filtered, 5);
 
-        // // Pointcloud computation
-        // pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud_stereo = _ds->pcFromDepthMap(depth_filtered);
+        // // // Pointcloud computation
+        // // pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud_stereo = _ds->pcFromDepthMap(depth_filtered);
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud_stereo = _ds->Triangulate(rect_imgl, rect_imgr);
+        // pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud_stereo = _ds->Triangulate(rect_imgl, rect_imgr);
 
-        // Generate and send message
-        sensor_msgs::msg::PointCloud2 cloud_msg;
-        pcl::toROSMsg(*pcl_cloud_stereo, cloud_msg);
-        cloud_msg.header.frame_id = "camera_frame";
-        cloud_msg.header.stamp = this->get_clock()->now();
-        pointcloud_pub_->publish(cloud_msg);
+        // // Generate and send message
+        // sensor_msgs::msg::PointCloud2 cloud_msg;
+        // pcl::toROSMsg(*pcl_cloud_stereo, cloud_msg);
+        // cloud_msg.header.frame_id = "camera_frame";
+        // cloud_msg.header.stamp = this->get_clock()->now();
+        // pointcloud_pub_->publish(cloud_msg);
 
-        cv_bridge::CvImage cv_img;
-        cv_img.header.stamp = this->get_clock()->now();
-        cv_img.header.frame_id = "camera_frame";
-        cv_img.encoding = "32FC1";
-        cv_img.image = depth_filtered;
-        depth_img_pub_->publish(*cv_img.toImageMsg());
+        // cv_bridge::CvImage cv_img;
+        // cv_img.header.stamp = this->get_clock()->now();
+        // cv_img.header.frame_id = "camera_frame";
+        // cv_img.encoding = "32FC1";
+        // cv_img.image = depth_filtered;
+        // depth_img_pub_->publish(*cv_img.toImageMsg());
 
     }
 

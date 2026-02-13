@@ -74,22 +74,25 @@ bool MonoCalibratorDS::run_calibration(double* intrinsics, std::vector<std::arra
     std::cout << "\n=== Intrinsics Camera ===\n";
     displayIntrinsics(intrinsics, model_);
 
-    // ---------------------------
-    // COVARIANCE COMPUTATION
-    // ---------------------------
-    ceres::Covariance::Options cov_options;
-    cov_options.null_space_rank = -1;
-    cov_options.algorithm_type = ceres::DENSE_SVD;
-    ceres::Covariance covariance(cov_options);  
+    // // ---------------------------
+    // // COVARIANCE COMPUTATION
+    // // ---------------------------
+    // ceres::Covariance::Options cov_options;
+    // cov_options.null_space_rank = -1;
+    // cov_options.algorithm_type = ceres::DENSE_SVD;
+    // //cov_options.algorithm_type = ceres::SPARSE_QR;
+    // ceres::Covariance covariance(cov_options);  
     
-    std::vector<std::pair<const double*, const double*>> blocks;
-    blocks.emplace_back(intrinsics, intrinsics);
-    covariance.Compute(blocks, &problem);
+    // std::vector<std::pair<const double*, const double*>> blocks;
+    // blocks.emplace_back(intrinsics, intrinsics);
+    // covariance.Compute(blocks, &problem);
 
-    double cov_intr[36];
-    covariance.GetCovarianceBlock(intrinsics, intrinsics, cov_intr);
-    std::cout << "\n=== Intrinsics Camera with cov ===\n";
-    displayIntrinsics(intrinsics, model_, cov_intr);
+    // double cov_intr[36];
+    // covariance.GetCovarianceBlock(intrinsics, intrinsics, cov_intr);
+    // std::cout << "\n=== Intrinsics Camera with cov ===\n";
+    // displayIntrinsics(intrinsics, model_, cov_intr);
+    std::cout << "\n=== Intrinsics Camera ===\n";
+    displayIntrinsics(intrinsics, model_);
 
     // Stockage des résultats de calibration
     cv::Mat K = (cv::Mat_<double>(3,3) << intrinsics[0], 0, intrinsics[2],
@@ -207,7 +210,7 @@ ceres::Solver::Summary MonoCalibratorDS::solveProblem(ceres::Problem& problem,
     options.linear_solver_ordering.reset(ordering);
     options.use_explicit_schur_complement      = true;
     
-    options.max_num_iterations                 = 100;
+    options.max_num_iterations                 = 500;
     options.minimizer_progress_to_stdout       = false;    
     options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
     options.function_tolerance                 = 1.e-6;

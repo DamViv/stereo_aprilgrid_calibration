@@ -67,5 +67,5 @@ def generate_launch_description():
         detector,        
         calibration_manager,
         calibration_gui,
-        # stereo_3D_reconstruction,
+        stereo_3D_reconstruction,
     ])

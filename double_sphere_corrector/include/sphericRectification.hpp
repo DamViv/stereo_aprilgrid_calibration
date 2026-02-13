@@ -24,7 +24,7 @@ class sphericRectification {
 
     void loadStereoConfig(const std::string& config_file);
 
-    void processImages(const cv::Mat& Il, const cv::Mat& Ir);
+    void processImages(const cv::Mat& Il, const cv::Mat& Ir, cv::Mat& Il_rect, cv::Mat& Ir_rect);
 
  private:  
 
@@ -32,6 +32,12 @@ class sphericRectification {
         cv::Mat& map_x_r, cv::Mat& map_y_r,
         cv::Mat& map_x_l, cv::Mat& map_y_l,        
         double FOVx_deg, double FOVy_deg);
+
+    void computePerspectiveMaps(
+        int width, int height,
+        cv::Mat& map_x_l, cv::Mat& map_y_l,
+        cv::Mat& map_x_r, cv::Mat& map_y_r,
+        double f_factor);
 
 
     cv::Vec3d unprojectDS(const cv::Vec2d& uv, const cv::Mat& K, double xi, double alpha);

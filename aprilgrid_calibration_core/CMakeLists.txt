@@ -31,8 +31,7 @@ include_directories(
 add_library(${PROJECT_NAME}_lib
   src/frame_collector.cpp  
   src/mono_calibrator_ds.cpp
-  src/stereo_calibrator_ds.cpp
-  src/projections_double_sphere.cpp
+  src/stereo_calibrator_ds.cpp  
 )
 
 ament_target_dependencies(${PROJECT_NAME}_lib

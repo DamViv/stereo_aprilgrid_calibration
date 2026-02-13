@@ -220,40 +220,40 @@ bool StereoCalibratorDS::run_calibration(double* intrinsics0, double* intrinsics
     ceres::Solver::Summary summary_final = solveProblem(problem_final, ordering_final);
 
 
-    // ---------------------------
-    // COVARIANCE COMPUTATION
-    // ---------------------------
-    ceres::Covariance::Options cov_options;
-    cov_options.null_space_rank = -1;
-    cov_options.algorithm_type = ceres::DENSE_SVD;
-    ceres::Covariance covariance(cov_options);  
+    // // ---------------------------
+    // // COVARIANCE COMPUTATION
+    // // ---------------------------
+    // ceres::Covariance::Options cov_options;
+    // cov_options.null_space_rank = -1;
+    // cov_options.algorithm_type = ceres::DENSE_SVD;
+    // ceres::Covariance covariance(cov_options);  
     
-    std::vector<std::pair<const double*, const double*>> blocks;
-    blocks.emplace_back(intrinsics0, intrinsics0);
-    blocks.emplace_back(intrinsics1, intrinsics1);
-    covariance.Compute(blocks, &problem_final);
+    // std::vector<std::pair<const double*, const double*>> blocks;
+    // blocks.emplace_back(intrinsics0, intrinsics0);
+    // blocks.emplace_back(intrinsics1, intrinsics1);
+    // covariance.Compute(blocks, &problem_final);
 
-    double cov_intr0[36], cov_intr1[36], cov_stereo[36];
-    covariance.GetCovarianceBlock(intrinsics0, intrinsics0, cov_intr0);
-    covariance.GetCovarianceBlock(intrinsics1, intrinsics1, cov_intr1);
-    covariance.GetCovarianceBlock(RT_stereo.data(), RT_stereo.data(), cov_stereo);
+    // double cov_intr0[36], cov_intr1[36], cov_stereo[36];
+    // covariance.GetCovarianceBlock(intrinsics0, intrinsics0, cov_intr0);
+    // covariance.GetCovarianceBlock(intrinsics1, intrinsics1, cov_intr1);
+    // covariance.GetCovarianceBlock(RT_stereo.data(), RT_stereo.data(), cov_stereo);
 
 
     // ---------------------------
     // PRINT RESULTS
     // ---------------------------
-    std::cout << "\n=== Intrinsics Camera 0 ===\n";
-    displayIntrinsics(intrinsics0, model_, cov_intr0);
-    std::cout << "\n=== Intrinsics Camera 1 ===\n";
-    displayIntrinsics(intrinsics1, model_, cov_intr1);
-    std::cout << "\n=== Stereo Extrinsics ===\n";
-    displayExtrinsics(RT_stereo, cov_stereo);
     // std::cout << "\n=== Intrinsics Camera 0 ===\n";
-    // displayIntrinsics(intrinsics0, model_);
+    // displayIntrinsics(intrinsics0, model_, cov_intr0);
     // std::cout << "\n=== Intrinsics Camera 1 ===\n";
-    // displayIntrinsics(intrinsics1, model_);
+    // displayIntrinsics(intrinsics1, model_, cov_intr1);
     // std::cout << "\n=== Stereo Extrinsics ===\n";
-    // displayExtrinsics(RT_stereo);
+    // displayExtrinsics(RT_stereo, cov_stereo);
+    std::cout << "\n=== Intrinsics Camera 0 ===\n";
+    displayIntrinsics(intrinsics0, model_);
+    std::cout << "\n=== Intrinsics Camera 1 ===\n";
+    displayIntrinsics(intrinsics1, model_);
+    std::cout << "\n=== Stereo Extrinsics ===\n";
+    displayExtrinsics(RT_stereo);
     std::cout << "\n=== Final RMSE ===\n";
     double final_rmse = computeRMSE(summary_final);
     std::cout << final_rmse << std::endl;
@@ -437,7 +437,7 @@ ceres::Solver::Summary StereoCalibratorDS::solveProblem(ceres::Problem& problem,
     options.linear_solver_ordering.reset(ordering);
     options.use_explicit_schur_complement      = true;
     
-    options.max_num_iterations                 = 100;
+    options.max_num_iterations                 = 500;
     options.minimizer_progress_to_stdout       = false;    
     options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
     options.function_tolerance                 = 1.e-6;

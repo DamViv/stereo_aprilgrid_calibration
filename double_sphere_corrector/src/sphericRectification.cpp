@@ -69,26 +69,28 @@ void sphericRectification::loadStereoConfig(const std::string& config_file)
 
 
 
-void sphericRectification::processImages(const cv::Mat& Il, const cv::Mat& Ir){
+void sphericRectification::processImages(const cv::Mat& Il, const cv::Mat& Ir, cv::Mat& Il_rect, cv::Mat& Ir_rect){
 
     // --- 1. Dimensions et FOV ---
     int width  = 1024;  // largeur image rectifiée
     int height = 768;   // hauteur image rectifiée
-    double FOVx_deg = 180.0;
+    double FOVx_deg = 180.0;    
     double FOVy_deg = 180.0;
+    
 
     // --- 2. Maps de remap ---
     cv::Mat map_x_l, map_y_l, map_x_r, map_y_r;
-    computeSphericalMaps(width, height, map_x_l, map_y_l, map_x_r, map_y_r, FOVx_deg, FOVy_deg);
+    // computeSphericalMaps(width, height, map_x_l, map_y_l, map_x_r, map_y_r, FOVx_deg, FOVy_deg);
+    
+    computePerspectiveMaps(width, height, map_x_l, map_y_l, map_x_r, map_y_r, 0.3);
 
-    // --- 3. Rectification des images ---
-    cv::Mat Il_rect, Ir_rect;
+    // --- 3. Rectification des images ---    
     cv::remap(Il, Il_rect, map_x_l, map_y_l, cv::INTER_LINEAR);
     cv::remap(Ir, Ir_rect, map_x_r, map_y_r, cv::INTER_LINEAR);
 
-    cv::imshow("Il_rect", Il_rect);
-    cv::imshow("Ir_rect", Ir_rect);
-    cv::waitKey(1);
+    // cv::imshow("Il_rect", Il_rect);
+    // cv::imshow("Ir_rect", Ir_rect);
+    // cv::waitKey(1);
 
     // --- 4. Préparer nuage de points ---
     std::vector<cv::Point3d> cloud3D;
@@ -171,6 +173,81 @@ void sphericRectification::computeSphericalMaps(int width, int height,
 }
 
 
+
+void sphericRectification::computePerspectiveMaps(
+        int width, int height,
+        cv::Mat& map_x_l, cv::Mat& map_y_l,
+        cv::Mat& map_x_r, cv::Mat& map_y_r,
+        double f_factor)
+{
+    // --- Préparer les maps ---
+    map_x_l = cv::Mat(height, width, CV_32F);
+    map_y_l = cv::Mat(height, width, CV_32F);
+    map_x_r = cv::Mat(height, width, CV_32F);
+    map_y_r = cv::Mat(height, width, CV_32F);
+
+    // --- Paramètres caméra perspective approximative ---
+    double cx = width  / 2.0;
+    double cy = height / 2.0;
+    double z  = f_factor * std::min(width, height);
+
+    // --- Parcourir tous les pixels de l'image rectifiée ---
+    for(int v = 0; v < height; v++)
+    {
+        for(int u = 0; u < width; u++)
+        {
+            // --- 1. Pixel rectifié → point 3D dans le plan z constant ---
+            double x = u - cx;
+            double y = v - cy;
+            cv::Vec3d point3D_l(x, y, z); // gauche
+            cv::Vec3d point3D_r = point3D_l; // initialement identique pour droite
+
+            // --- 2. Rotation stéréo pour la caméra droite ---
+            point3D_r[0] = Rstereo_.at<double>(0,0)*point3D_l[0] +
+                           Rstereo_.at<double>(0,1)*point3D_l[1] +
+                           Rstereo_.at<double>(0,2)*point3D_l[2];
+
+            point3D_r[1] = Rstereo_.at<double>(1,0)*point3D_l[0] +
+                           Rstereo_.at<double>(1,1)*point3D_l[1] +
+                           Rstereo_.at<double>(1,2)*point3D_l[2];
+
+            point3D_r[2] = Rstereo_.at<double>(2,0)*point3D_l[0] +
+                           Rstereo_.at<double>(2,1)*point3D_l[1] +
+                           Rstereo_.at<double>(2,2)*point3D_l[2];
+
+            // --- 3. Projection Double Sphere ---
+            // Caméra gauche
+            {
+                double x2 = point3D_l[0]*point3D_l[0];
+                double y2 = point3D_l[1]*point3D_l[1];
+                double z2 = point3D_l[2]*point3D_l[2];
+                double d1 = std::sqrt(x2 + y2 + z2);
+                double zxi = xil_ * d1 + point3D_l[2];
+                double d2 = std::sqrt(x2 + y2 + zxi*zxi);
+                double div = alphal_ * d2 + (1.0 - alphal_) * zxi;
+                double u_l = Kl_.at<double>(0,0) * point3D_l[0] / div + Kl_.at<double>(0,2);
+                double v_l = Kl_.at<double>(1,1) * point3D_l[1] / div + Kl_.at<double>(1,2);
+                map_x_l.at<float>(v,u) = static_cast<float>(u_l);
+                map_y_l.at<float>(v,u) = static_cast<float>(v_l);
+            }
+
+            // Caméra droite
+            {
+                double x2 = point3D_r[0]*point3D_r[0];
+                double y2 = point3D_r[1]*point3D_r[1];
+                double z2 = point3D_r[2]*point3D_r[2];
+                double d1 = std::sqrt(x2 + y2 + z2);
+                double zxi = xir_ * d1 + point3D_r[2];
+                double d2 = std::sqrt(x2 + y2 + zxi*zxi);
+                double div = alphar_ * d2 + (1.0 - alphar_) * zxi;
+                double u_r = Kr_.at<double>(0,0) * point3D_r[0] / div + Kr_.at<double>(0,2);
+                double v_r = Kr_.at<double>(1,1) * point3D_r[1] / div + Kr_.at<double>(1,2);
+                map_x_r.at<float>(v,u) = static_cast<float>(u_r);
+                map_y_r.at<float>(v,u) = static_cast<float>(v_r);
+            }
+        }
+    }
+}
 
 
 cv::Vec3d sphericRectification::unprojectDS(const cv::Vec2d& uv, const cv::Mat& K, double xi, double alpha)

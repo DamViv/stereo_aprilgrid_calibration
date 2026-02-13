@@ -185,9 +185,6 @@ class CalibrationWindow(QMainWindow):
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(25)
 
-        MAX_FRAMES = 300
-        MAX_PAIRS = 150
-
         def make_bar():
             bar = QProgressBar()
             bar.setRange(0, 100)
@@ -201,7 +198,7 @@ class CalibrationWindow(QMainWindow):
         cam0_layout = QVBoxLayout()
 
         self.cam0_frames_bar = make_bar()
-        self.cam0_frames_label = QLabel(f"0 / {MAX_FRAMES} frames")
+        self.cam0_frames_label = QLabel("0 valid frames")
         self.cam0_frames_label.setAlignment(Qt.AlignCenter)
 
         self.cam0_div_bar = make_bar()
@@ -230,7 +227,7 @@ class CalibrationWindow(QMainWindow):
         cam1_layout = QVBoxLayout()
 
         self.cam1_frames_bar = make_bar()
-        self.cam1_frames_label = QLabel(f"0 / {MAX_FRAMES} frames")
+        self.cam1_frames_label = QLabel("0 valid frames")
         self.cam1_frames_label.setAlignment(Qt.AlignCenter)
 
         self.cam1_div_bar = make_bar()
@@ -256,7 +253,7 @@ class CalibrationWindow(QMainWindow):
         stereo_layout = QVBoxLayout()
 
         self.stereo_frames_bar = make_bar()
-        self.stereo_frames_label = QLabel(f"0 / {MAX_PAIRS} pairs")
+        self.stereo_frames_label = QLabel("0 valid stereo pairs")
         self.stereo_frames_label.setAlignment(Qt.AlignCenter)
 
         stereo_layout.addWidget(self.stereo_frames_bar, alignment=Qt.AlignCenter)
@@ -328,24 +325,24 @@ class CalibrationWindow(QMainWindow):
 
 
     def stats_cb(self, msg):
-        MAX_FRAMES = 300
-        MAX_PAIRS = 150
+        MAX_FRAMES = 50
+        MAX_PAIRS = 50
 
         # Cam0
         self.cam0_frames_bar.setValue(min(100, int(msg.cam0_frame_count / MAX_FRAMES * 100)))
-        self.cam0_frames_label.setText(f"{msg.cam0_frame_count} / {MAX_FRAMES} frames")
+        self.cam0_frames_label.setText(f"{msg.cam0_frame_count} valid frames")
         self.cam0_div_bar.setValue(int(msg.cam0_diversity * 100))
         self.cam0_cov_bar.setValue(int(msg.cam0_coverage * 100))
 
         # Cam1
         self.cam1_frames_bar.setValue(min(100, int(msg.cam1_frame_count / MAX_FRAMES * 100)))
-        self.cam1_frames_label.setText(f"{msg.cam1_frame_count} / {MAX_FRAMES} frames")
+        self.cam1_frames_label.setText(f"{msg.cam1_frame_count} valid frames")
         self.cam1_div_bar.setValue(int(msg.cam1_diversity * 100))
         self.cam1_cov_bar.setValue(int(msg.cam1_coverage * 100))
 
         # Stereo
         self.stereo_frames_bar.setValue(min(100, int(msg.stereo_pair_count / MAX_PAIRS * 100)))
-        self.stereo_frames_label.setText(f"{msg.stereo_pair_count} / {MAX_PAIRS} pairs")
+        self.stereo_frames_label.setText(f"{msg.stereo_pair_count} valid stereo pairs")
 
         # Color border based on ready
         def set_box_color(box, ready):
@@ -553,6 +550,10 @@ class CalibrationWindow(QMainWindow):
         else:
             self.calib_results_cam1_text.setText(txt)
 
+        if hasattr(res, "calibration_file"):
+            self.log("Calibration saved to:" + res.calibration_file)
+
+
 
     def display_stereo_calibration(self, res):
         """
@@ -590,7 +591,7 @@ class CalibrationWindow(QMainWindow):
         # Add optimised mono intrinsics
         if hasattr(res, "intrinsics0"):
             txt = self.calib_results_cam0_text.text()
-            txt += "============ After Stereo Optim ================\n"            
+            txt += "\n====== After Stereo Optim ======\n"            
             txt += f"fx: {res.intrinsics0[0]:.3f}\n"
             txt += f"fy: {res.intrinsics0[1]:.3f}\n"
             txt += f"cx: {res.intrinsics0[2]:.3f}\n"
@@ -600,7 +601,7 @@ class CalibrationWindow(QMainWindow):
 
         if hasattr(res, "intrinsics1"):
             txt = self.calib_results_cam1_text.text()
-            txt += "\n============ After Stereo Optim ================\n"            
+            txt += "\n====== After Stereo Optim ======\n"
             txt += f"fx: {res.intrinsics1[0]:.3f}\n"
             txt += f"fy: {res.intrinsics1[1]:.3f}\n"
             txt += f"cx: {res.intrinsics1[2]:.3f}\n"
@@ -608,6 +609,8 @@ class CalibrationWindow(QMainWindow):
             txt += "Distortion: " + ", ".join([f"{d:.6f}" for d in res.distortion1])
             self.calib_results_cam1_text.setText(txt)
 
+        if hasattr(res, "calibration_file"):
+            self.log("Calibration saved to: " +res.calibration_file)
 
 # ---------- Main ----------
 def main():
